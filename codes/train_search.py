@@ -22,6 +22,7 @@ import pdb
 
 
 def main():
+
   if not torch.cuda.is_available():
     logging.info('no gpu device available')
     sys.exit(1)
