@@ -25,7 +25,8 @@ class MixedOp(nn.Module):
 
   def forward(self, x, weights, updateType):
     if updateType == "weights":
-      result = [w * op(x) if w.data.cpu().numpy()[0] else w for w, op in zip(weights, self._ops)]
+      result = [w * op(x)  for w, op in zip(weights, self._ops)]
+      # result = [w * op(x) if w.data.cpu().numpy()[0] else w for w, op in zip(weights, self._ops)]
     else:
       result = [w * op(x) for w, op in zip(weights, self._ops)]
     return sum(result)
@@ -84,7 +85,7 @@ class Network(nn.Module):
       nn.Conv2d(3, C_curr, 3, padding=1, bias=False),
       nn.BatchNorm2d(C_curr)
     )
- 
+
     C_prev_prev, C_prev, C_curr = C_curr, C_curr, C
     self.cells = nn.ModuleList()
     reduction_prev = False
@@ -129,7 +130,7 @@ class Network(nn.Module):
   def _loss(self, input, target, updateType):
     logits = self(input, updateType)
     return self._criterion(logits, target) + self._l2_loss()
-  
+
   def _l2_loss(self):
     normal_burden = []
     params = 0
@@ -138,6 +139,7 @@ class Network(nn.Module):
     for key in PRIMITIVES_NORMAL:
       normal_burden.append(PARAMS[key]/params)
     normal_burden = torch.autograd.Variable(torch.Tensor(normal_burden).cuda(), requires_grad=False)
+    # arch_para had been binarization
     return (self.alphas_normal*self.alphas_normal*normal_burden).sum()*self._l2
 
   def _initialize_alphas(self):
@@ -164,12 +166,14 @@ class Network(nn.Module):
       self._arch_parameters[index].data = clip_scale[index].data
 
   def binarization(self, e_greedy=0):
+    # 二值化 0，1
     self.save_params()
     for index in range(len(self._arch_parameters)):
       m,n = self._arch_parameters[index].size()
       if np.random.rand() <= e_greedy:
         maxIndexs = np.random.choice(range(n), m)
       else:
+        # (14,8),以shape[1]为轴，返回每行最大值所在的列索引
         maxIndexs = self._arch_parameters[index].data.cpu().numpy().argmax(axis=1)
       self._arch_parameters[index].data = self.proximal_step(self._arch_parameters[index], maxIndexs)
 
@@ -181,10 +185,12 @@ class Network(nn.Module):
     for index in range(len(self._arch_parameters)):
       self._arch_parameters[index].data = self.proximal_step(self._arch_parameters[index])
 
-  def proximal_step(self, var, maxIndexs=None):
-    values = var.data.cpu().numpy()
+  def proximal_step(self, arch_parameter, maxIndexs=None):
+    values = arch_parameter.data.cpu().numpy()
+    # (14,8) / (14,5)
     m,n = values.shape
     alphas = []
+    # 每行最大值置为1，其余置为0
     for i in range(m):
       for j in range(n):
         if j==maxIndexs[i]:
@@ -196,12 +202,14 @@ class Network(nn.Module):
     cur = 0
     while(cur<m):
       cur_alphas = alphas[cur:cur+step]
+      # 对每个结点，取权重最大的两个操作所在的边的编号，此时的边已经是纯净边，仅包含一个操作
       reserve_index = [v[0] for v in sorted(list(zip(range(len(cur_alphas)), cur_alphas)), key=lambda x:x[1],
                                             reverse=True)[:2]]
       for index in range(cur,cur+step):
         if (index - cur) in reserve_index:
           continue
         else:
+          # 未被选中的边所有操作的权重被置为0
           values[index] = np.zeros(n)
       cur = cur + step
       step += 1

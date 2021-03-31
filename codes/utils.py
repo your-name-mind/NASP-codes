@@ -29,10 +29,10 @@ def accuracy(output, target, topk=(1,)):
   _, pred = output.topk(maxk, 1, True, True)
   pred = pred.t()
   correct = pred.eq(target.view(1, -1).expand_as(pred))
-
+  # torch.tensor([]).miu
   res = []
   for k in topk:
-    correct_k = correct[:k].view(-1).float().sum(0)
+    correct_k = correct[:k].reshape(-1).float().sum(0)
     res.append(correct_k.mul_(100.0/batch_size))
   return res
 
@@ -109,12 +109,15 @@ def drop_path(x, drop_prob):
 
 
 def create_exp_dir(path, scripts_to_save=None):
+  print('create')
   if not os.path.exists(path):
-    os.mkdir(path)
+    # os.mkdir(path,)
+    # os.system('mkdir -p '+path)
+    os.makedirs(path)
   print('Experiment dir : {}'.format(path))
 
   if scripts_to_save is not None:
-    os.mkdir(os.path.join(path, 'scripts'))
+    os.makedirs(os.path.join(path, 'scripts'))
     for script in scripts_to_save:
       dst_file = os.path.join(path, 'scripts', os.path.basename(script))
       shutil.copyfile(script, dst_file)

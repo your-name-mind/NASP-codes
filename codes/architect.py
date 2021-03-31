@@ -23,6 +23,7 @@ class Architect(object):
     self.optimizer.step()
 
   def _backward_step(self, input_valid, target_valid, updateType):
+    # 架构参数二值化
     self.model.binarization()
     loss = self.model._loss(input_valid, target_valid, updateType)
     loss.backward()
