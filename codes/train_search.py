@@ -58,12 +58,12 @@ def main():
   train_queue = torch.utils.data.DataLoader(
       train_data, batch_size=args.batch_size,
       sampler=torch.utils.data.sampler.SubsetRandomSampler(indices[:split]),
-      pin_memory=True, num_workers=3)
+      pin_memory=True, num_workers=args.num_worker)
 
   valid_queue = torch.utils.data.DataLoader(
       train_data, batch_size=args.batch_size,
       sampler=torch.utils.data.sampler.SubsetRandomSampler(indices[split:num_train]),
-      pin_memory=True, num_workers=4)
+      pin_memory=True, num_workers=args.num_worker)
 
   scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
         optimizer, float(args.epochs), eta_min=args.learning_rate_min)
@@ -79,6 +79,8 @@ def main():
 
     genotype = model.genotype()
     logging.info('genotype = %s', genotype)
+    logging.info(model.alphas_normal)
+    logging.info(model.alphas_reduce)
 
     # training
     start_time = time.time()
@@ -138,9 +140,12 @@ def train(train_queue, valid_queue, model, architect, criterion, optimizer, lr):
     loss.backward()
     end3 = time.time()
     backward_time += end3 - begin3
+
     model.restore()
+
     # nn.utils.clip_grad_norm(model.parameters(), args.grad_clip)
     nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip)
+    # only update selected op's conv_para
     optimizer.step()
     prec1, prec5 = utils.accuracy(logits, target, topk=(1, 5))
     objs.update(loss.item(), n)
@@ -180,16 +185,15 @@ def infer(valid_queue, model, criterion):
 
 if __name__ == '__main__':
   '''第一、 主脚本中的执行函数要放在 if _ name _ =='_ main '：代码块中，以防止多进程启动时主脚本不会再次运行（很可能会产生错误）'''
-
-  parser = argparse.ArgumentParser("cifar")
-  parser.add_argument('--data', type=str, default='../data', help='location of the data corpus')
-  parser.add_argument('--batch_size', type=int, default=16, help='batch size')
+  parser = argparse.ArgumentParser("cifar") 
+  parser.add_argument('--data', type=str, default='/home/ltf/another_code/data', help='location of the data corpus')
+  parser.add_argument('--batch_size', type=int, default=64, help='batch size')
   parser.add_argument('--learning_rate', type=float, default=0.025, help='init learning rate')
   parser.add_argument('--learning_rate_min', type=float, default=0.001, help='min learning rate')
   parser.add_argument('--momentum', type=float, default=0.9, help='momentum')
   parser.add_argument('--weight_decay', type=float, default=3e-4, help='weight decay')
   parser.add_argument('--report_freq', type=float, default=50, help='report frequency')
-  parser.add_argument('--gpu', type=int, default=0, help='gpu device id')
+  parser.add_argument('--gpu', type=int, default=1, help='gpu device id')
   parser.add_argument('--epochs', type=int, default=50, help='num of training epochs')
   parser.add_argument('--init_channels', type=int, default=16, help='num of init channels')
   parser.add_argument('--layers', type=int, default=8, help='total number of layers')
@@ -199,6 +203,7 @@ if __name__ == '__main__':
   parser.add_argument('--drop_path_prob', type=float, default=0.3, help='drop path probability')
   parser.add_argument('--save', type=str, default='EXP', help='experiment name')
   parser.add_argument('--seed', type=int, default=2, help='random seed')
+  parser.add_argument('--num_worker', type=int, default=4, help='data loader number of worker')
   parser.add_argument('--grad_clip', type=float, default=5, help='gradient clipping')
   parser.add_argument('--train_portion', type=float, default=0.5, help='portion of training data')
   parser.add_argument('--arch_learning_rate', type=float, default=3e-4, help='learning rate for arch encoding')
@@ -212,6 +217,8 @@ if __name__ == '__main__':
   args.save = 'result/search-{}-{}'.format(args.save, time.strftime("%Y%m%d-%H%M%S"))
   if args.debug:
     args.save += "_debug"
+  if not os.path.exists(args.data):
+    args.data = '/automl/dataset/cifar'
   utils.create_exp_dir(args.save, scripts_to_save=glob.glob('*.py'))
 
   log_format = '%(asctime)s %(message)s'

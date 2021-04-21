@@ -20,6 +20,7 @@ class Architect(object):
   def step(self, input_train, target_train, input_valid, target_valid, eta, network_optimizer):
     self.optimizer.zero_grad()
     self._backward_step(input_valid, target_valid, updateType="alphas")
+    # only update selected op’s arch para
     self.optimizer.step()
 
   def _backward_step(self, input_valid, target_valid, updateType):

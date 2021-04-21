@@ -109,10 +109,7 @@ def drop_path(x, drop_prob):
 
 
 def create_exp_dir(path, scripts_to_save=None):
-  print('create')
   if not os.path.exists(path):
-    # os.mkdir(path,)
-    # os.system('mkdir -p '+path)
     os.makedirs(path)
   print('Experiment dir : {}'.format(path))
 

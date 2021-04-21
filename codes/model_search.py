@@ -4,7 +4,7 @@ import torch.nn.functional as F
 import numpy as np
 from operations import *
 from torch.autograd import Variable
-from genotypes import PRIMITIVES_NORMAL, PRIMITIVES_REDUCE, PARAMS
+from genotypes import PRIMITIVES, PARAMS
 from genotypes import Genotype
 import pdb
 
@@ -13,20 +13,20 @@ class MixedOp(nn.Module):
   def __init__(self, C, stride, reduction):
     super(MixedOp, self).__init__()
     self._ops = nn.ModuleList()
-    if reduction:
-      primitives = PRIMITIVES_REDUCE
-    else:
-      primitives = PRIMITIVES_NORMAL
-    for primitive in primitives:
+    # if reduction:
+    #   primitives = PRIMITIVES_REDUCE
+    # else:
+    #   primitives = PRIMITIVES_NORMAL
+    for primitive in PRIMITIVES:
       op = OPS[primitive](C, stride, False)
       if 'pool' in primitive:
         op = nn.Sequential(op, nn.BatchNorm2d(C, affine=False))
       self._ops.append(op)
 
   def forward(self, x, weights, updateType):
-    if updateType == "weights":
-      result = [w * op(x)  for w, op in zip(weights, self._ops)]
-      # result = [w * op(x) if w.data.cpu().numpy()[0] else w for w, op in zip(weights, self._ops)]
+    if updateType == "weights_bin":
+      # result = [w * op(x) if w.data.cpu().numpy() else w for w, op in zip(weights, self._ops)]
+      result = [w * op(x) for w, op in zip(weights, self._ops) if w.item()]
     else:
       result = [w * op(x) for w, op in zip(weights, self._ops)]
     return sum(result)
@@ -115,7 +115,7 @@ class Network(nn.Module):
         x.data.copy_(y.data)
     return model_new
 
-  def forward(self, input, updateType="weights"):
+  def forward(self, input, updateType="weights_bin"):
     s0 = s1 = self.stem(input)
     for i, cell in enumerate(self.cells):
       if cell.reduction:
@@ -124,7 +124,8 @@ class Network(nn.Module):
         weights = self.alphas_normal
       s0, s1 = s1, cell(s0, s1, weights, updateType)
     out = self.global_pooling(s1)
-    logits = self.classifier(out.view(out.size(0),-1))
+    # logits = self.classifier(out.resize(out.size(0), -1))
+    logits = self.classifier(torch.flatten(out, start_dim=1))
     return logits
 
   def _loss(self, input, target, updateType):
@@ -132,22 +133,21 @@ class Network(nn.Module):
     return self._criterion(logits, target) + self._l2_loss()
 
   def _l2_loss(self):
-    normal_burden = []
+    para_burden = []
     params = 0
-    for key in PRIMITIVES_NORMAL:
+    for key in PRIMITIVES:
       params += PARAMS[key]
-    for key in PRIMITIVES_NORMAL:
-      normal_burden.append(PARAMS[key]/params)
-    normal_burden = torch.autograd.Variable(torch.Tensor(normal_burden).cuda(), requires_grad=False)
+    for key in PRIMITIVES:
+      para_burden.append(PARAMS[key]/params)
+    para_burden = torch.autograd.Variable(torch.Tensor(para_burden).cuda(), requires_grad=False)
     # arch_para had been binarization
-    return (self.alphas_normal*self.alphas_normal*normal_burden).sum()*self._l2
+    return (self.alphas_normal*self.alphas_normal*para_burden).sum()*self._l2
 
   def _initialize_alphas(self):
     k = sum(1 for i in range(self._steps) for n in range(2+i))
-    num_ops_normal = len(PRIMITIVES_NORMAL)
-    num_ops_reduce = len(PRIMITIVES_REDUCE)
-    self.alphas_normal = Variable(torch.ones(k, num_ops_normal).cuda()/2, requires_grad=True)
-    self.alphas_reduce = Variable(torch.ones(k, num_ops_reduce).cuda()/2, requires_grad=True)
+    num_ops = len(PRIMITIVES)
+    self.alphas_normal = Variable(torch.ones(k, num_ops).cuda()/2, requires_grad=True)
+    self.alphas_reduce = Variable(torch.ones(k, num_ops).cuda()/2, requires_grad=True)
     self._arch_parameters = [
       self.alphas_normal,
       self.alphas_reduce,
@@ -166,6 +166,7 @@ class Network(nn.Module):
       self._arch_parameters[index].data = clip_scale[index].data
 
   def binarization(self, e_greedy=0):
+    # todo 一旦某个操作早期具有了相对其他操作的优势（权更大），会不会该操作总是会被选择 ？,强行屏蔽掉上一个批次的选择 ？
     # 二值化 0，1
     self.save_params()
     for index in range(len(self._arch_parameters)):
@@ -189,6 +190,7 @@ class Network(nn.Module):
     values = arch_parameter.data.cpu().numpy()
     # (14,8) / (14,5)
     m,n = values.shape
+    # 保存每行的最大值
     alphas = []
     # 每行最大值置为1，其余置为0
     for i in range(m):
@@ -202,7 +204,7 @@ class Network(nn.Module):
     cur = 0
     while(cur<m):
       cur_alphas = alphas[cur:cur+step]
-      # 对每个结点，取权重最大的两个操作所在的边的编号，此时的边已经是纯净边，仅包含一个操作
+      # 对每个结点，取权重最大的两个操作所在的边的编号，此时的边已经是纯净边，仅包含一个操作，zip-> (row_index,maxV)
       reserve_index = [v[0] for v in sorted(list(zip(range(len(cur_alphas)), cur_alphas)), key=lambda x:x[1],
                                             reverse=True)[:2]]
       for index in range(cur,cur+step):
@@ -238,8 +240,8 @@ class Network(nn.Module):
         n += 1
       return gene
 
-    gene_normal = _parse(F.softmax(self.alphas_normal, dim=-1).data.cpu().numpy(), PRIMITIVES_NORMAL)
-    gene_reduce = _parse(F.softmax(self.alphas_reduce, dim=-1).data.cpu().numpy(), PRIMITIVES_REDUCE)
+    gene_normal = _parse(F.softmax(self.alphas_normal, dim=-1).data.cpu().numpy(), PRIMITIVES)
+    gene_reduce = _parse(F.softmax(self.alphas_reduce, dim=-1).data.cpu().numpy(), PRIMITIVES)
 
     concat = range(2+self._steps-self._multiplier, self._steps+2)
     genotype = Genotype(
