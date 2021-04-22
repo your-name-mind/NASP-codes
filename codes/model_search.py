@@ -1,3 +1,5 @@
+import logging
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -68,8 +70,9 @@ class Cell(nn.Module):
 
 class Network(nn.Module):
 
-  def __init__(self, C, num_classes, layers, criterion, greedy=0, l2=0, steps=4, multiplier=4, stem_multiplier=3):
+  def __init__(self,logging, C, num_classes, layers, criterion, greedy=0, l2=0, steps=4, multiplier=4, stem_multiplier=3):
     super(Network, self).__init__()
+    self.logging = logging
     self._C = C
     self._num_classes = num_classes
     self._layers = layers
@@ -172,6 +175,7 @@ class Network(nn.Module):
       else:
         maxIndexs = self._arch_parameters[index].data.cpu().numpy().argmax(axis=1)
       self._arch_parameters[index].data = self.proximal_step(self._arch_parameters[index], maxIndexs)
+      logging.info(self._arch_parameters[index].data)
 
   def restore(self):
     for index in range(len(self._arch_parameters)):
