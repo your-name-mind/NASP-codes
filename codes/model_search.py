@@ -26,10 +26,10 @@ class MixedOp(nn.Module):
   def forward(self, x, weights, updateType):
     if updateType == "weights_bin":
       # result = [w * op(x) if w.data.cpu().numpy() else w for w, op in zip(weights, self._ops)]
-      result = [w * op(x) for w, op in zip(weights, self._ops) if w.item()]
+      return sum([w * op(x) for w, op in zip(weights, self._ops) if w.item()])
     else:
-      result = [w * op(x) for w, op in zip(weights, self._ops)]
-    return sum(result)
+      return sum( [w * op(x) for w, op in zip(weights, self._ops)])
+    # return sum(result)
 
 
 class Cell(nn.Module):
@@ -53,11 +53,10 @@ class Cell(nn.Module):
         op = MixedOp(C, stride, reduction)
         self._ops.append(op)
 
-  def forward(self, s0, s1, weights, updateType):
-    s0 = self.preprocess0(s0)
-    s1 = self.preprocess1(s1)
-
-    states = [s0, s1]
+  def forward(self, s00, s11, weights, updateType):
+    s0 = self.preprocess0(s00)
+    s1 = self.preprocess1(s11)
+    states = [s0, s1] 
     offset = 0
     for i in range(self._steps):
       s = sum(self._ops[offset+j](h, weights[offset+j], updateType) for j, h in enumerate(states))
@@ -166,7 +165,7 @@ class Network(nn.Module):
       self._arch_parameters[index].data = clip_scale[index].data
 
   def binarization(self, e_greedy=0):
-    # todo 一旦某个操作早期具有了相对其他操作的优势（权更大），会不会该操作总是会被选择 ？,强行屏蔽掉上一个批次的选择 ？
+    # todo 一旦某个操作早期具有了相对其他操作的优势（权更大），会不会该操作总是会被选择 ？,强行屏蔽掉上一个批次的选择 ? or random ?
     # 二值化 0，1
     self.save_params()
     for index in range(len(self._arch_parameters)):

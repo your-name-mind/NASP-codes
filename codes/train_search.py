@@ -187,7 +187,7 @@ if __name__ == '__main__':
   '''第一、 主脚本中的执行函数要放在 if _ name _ =='_ main '：代码块中，以防止多进程启动时主脚本不会再次运行（很可能会产生错误）'''
   parser = argparse.ArgumentParser("cifar") 
   parser.add_argument('--data', type=str, default='/home/ltf/another_code/data', help='location of the data corpus')
-  parser.add_argument('--batch_size', type=int, default=64, help='batch size')
+  parser.add_argument('--batch_size', type=int, default=128, help='batch size')
   parser.add_argument('--learning_rate', type=float, default=0.025, help='init learning rate')
   parser.add_argument('--learning_rate_min', type=float, default=0.001, help='min learning rate')
   parser.add_argument('--momentum', type=float, default=0.9, help='momentum')
