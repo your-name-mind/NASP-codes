@@ -55,10 +55,10 @@ def main():
   valid_data = dset.CIFAR10(root=args.data, train=False, download=True, transform=valid_transform)
 
   train_queue = torch.utils.data.DataLoader(
-      train_data, batch_size=args.batch_size, shuffle=True, pin_memory=True, num_workers=0)
+      train_data, batch_size=args.batch_size, shuffle=True, pin_memory=True, num_workers=args.num_worker)
 
   valid_queue = torch.utils.data.DataLoader(
-      valid_data, batch_size=args.batch_size, shuffle=False, pin_memory=True, num_workers=0)
+      valid_data, batch_size=args.batch_size, shuffle=False, pin_memory=True, num_workers=args.num_worker)
 
   scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, float(args.epochs))
 
@@ -152,22 +152,17 @@ if __name__ == '__main__':
   parser.add_argument('--cutout_length', type=int, default=16, help='cutout length')
   parser.add_argument('--drop_path_prob', type=float, default=0.2, help='drop path probability')
   parser.add_argument('--save', type=str, default='EXP', help='experiment name')
+  parser.add_argument('--tag', type=str, default='', help='tag for this time eval')
   parser.add_argument('--seed', type=int, default=0, help='random seed')
+  parser.add_argument('--num_worker', type=int, default=0, help='dataloader number of worker')
   parser.add_argument('--arch', type=str, default='NASP', help='which architecture to use')
   parser.add_argument('--grad_clip', type=float, default=5, help='gradient clipping')
   args = parser.parse_args()
 
-  args.save = 'result/eval-{}-{}'.format(args.save, time.strftime("%Y%m%d-%H%M%S"))
+  args.save = 'result/eval/{}-eval-{}-{}'.format(args.tag, args.save, time.strftime("%Y%m%d-%H%M%S"))
   utils.create_exp_dir(args.save, scripts_to_save=glob.glob('*.py'))
   if not os.path.exists(args.data):
     args.data = '/automl/dataset/cifar'
-
-  log_format = '%(asctime)s %(message)s'
-  logging.basicConfig(stream=sys.stdout, level=logging.INFO,
-                      format=log_format, datefmt='%m/%d %I:%M:%S %p')
-  fh = logging.FileHandler(os.path.join(args.save, 'log.txt'))
-  fh.setFormatter(logging.Formatter(log_format))
-  logging.getLogger().addHandler(fh)
-
+  utils.init_logging(logging,os.path.join(args.save,"log.txt"))
   main() 
 

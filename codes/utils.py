@@ -1,4 +1,6 @@
 import os
+import sys
+
 import numpy as np
 import torch
 import shutil
@@ -118,4 +120,12 @@ def create_exp_dir(path, scripts_to_save=None):
     for script in scripts_to_save:
       dst_file = os.path.join(path, 'scripts', os.path.basename(script))
       shutil.copyfile(script, dst_file)
+
+def init_logging(logging, save_path):
+    log_format = '%(asctime)s %(message)s'
+    logging.basicConfig(stream=sys.stdout, level=logging.INFO,
+                        format=log_format, datefmt='%m/%d %I:%M:%S')
+    fh = logging.FileHandler(save_path)
+    fh.setFormatter(logging.Formatter(log_format))
+    logging.getLogger().addHandler(fh)
 

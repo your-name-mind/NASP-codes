@@ -29,6 +29,7 @@ parser.add_argument('--model_path', type=str, default='EXP/model.pt', help='path
 parser.add_argument('--auxiliary', action='store_true', default=False, help='use auxiliary tower')
 parser.add_argument('--drop_path_prob', type=float, default=0, help='drop path probability')
 parser.add_argument('--seed', type=int, default=0, help='random seed')
+parser.add_argument('--num_worker', type=int, default=0, help='dataloader number of worker')
 parser.add_argument('--arch', type=str, default='NASP', help='which architecture to use')
 args = parser.parse_args()
 
@@ -73,7 +74,7 @@ def main():
     ]))
 
   valid_queue = torch.utils.data.DataLoader(
-    valid_data, batch_size=args.batch_size, shuffle=False, pin_memory=True, num_workers=4)
+    valid_data, batch_size=args.batch_size, shuffle=False, pin_memory=True, num_workers=args.num_worker)
 
   model.drop_path_prob = args.drop_path_prob
   valid_acc_top1, valid_acc_top5, valid_obj = infer(valid_queue, model, criterion)

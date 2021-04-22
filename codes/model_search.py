@@ -1,12 +1,11 @@
-import torch
-import torch.nn as nn
+import os
 import torch.nn.functional as F
 import numpy as np
 from operations import *
 from torch.autograd import Variable
 from genotypes import PRIMITIVES, PARAMS
 from genotypes import Genotype
-import pdb
+import utils
 
 class MixedOp(nn.Module):
 
@@ -25,11 +24,9 @@ class MixedOp(nn.Module):
 
   def forward(self, x, weights, updateType):
     if updateType == "weights_bin":
-      # result = [w * op(x) if w.data.cpu().numpy() else w for w, op in zip(weights, self._ops)]
       return sum([w * op(x) for w, op in zip(weights, self._ops) if w.item()])
     else:
       return sum( [w * op(x) for w, op in zip(weights, self._ops)])
-    # return sum(result)
 
 
 class Cell(nn.Module):
@@ -68,7 +65,7 @@ class Cell(nn.Module):
 
 class Network(nn.Module):
 
-  def __init__(self, C, num_classes, layers, criterion, greedy=0, l2=0, steps=4, multiplier=4, stem_multiplier=3):
+  def __init__(self, save, C, num_classes, layers, criterion, greedy=0, l2=0, steps=4, multiplier=4, stem_multiplier=3):
     super(Network, self).__init__()
     self._C = C
     self._num_classes = num_classes
@@ -78,6 +75,7 @@ class Network(nn.Module):
     self._l2 = l2
     self._steps = steps
     self._multiplier = multiplier
+    utils.init_logging(logging=logging , save_path=os.path.join(save, 'SelectedBinArchPara.txt'))
 
     C_curr = stem_multiplier*C
     self.stem = nn.Sequential(
@@ -165,7 +163,9 @@ class Network(nn.Module):
       self._arch_parameters[index].data = clip_scale[index].data
 
   def binarization(self, e_greedy=0):
-    # todo 一旦某个操作早期具有了相对其他操作的优势（权更大），会不会该操作总是会被选择 ？,强行屏蔽掉上一个批次的选择 ? or random ?
+    # todo 一旦某个操作早期具有了相对其他操作的优势（权更大），会造成该操作总是会被选择 ，
+    #  除非最优操作在某次梯度更新之后低于次优操作,而次优操作在早期就没被更新过。。所以权重就会很低,
+    #  强行屏蔽掉上一个批次的选择 ? or random ?
     # 二值化 0，1
     self.save_params()
     for index in range(len(self._arch_parameters)):
@@ -176,6 +176,7 @@ class Network(nn.Module):
         # (14,8),以shape[1]为轴，返回每行最大值所在的列索引
         maxIndexs = self._arch_parameters[index].data.cpu().numpy().argmax(axis=1)
       self._arch_parameters[index].data = self.proximal_step(self._arch_parameters[index], maxIndexs)
+      logging.info(self._arch_parameters[index].data)
 
   def restore(self):
     for index in range(len(self._arch_parameters)):

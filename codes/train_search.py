@@ -38,7 +38,7 @@ def main():
 
   criterion = nn.CrossEntropyLoss()
   criterion = criterion.cuda()
-  model = Network(args.init_channels, CIFAR_CLASSES, args.layers, criterion, args.greedy, args.l2)
+  model = Network(args.save, args.init_channels, CIFAR_CLASSES, args.layers, criterion, args.greedy, args.l2)
   model = model.cuda()
   logging.info("param size = %fMB", utils.count_parameters_in_MB(model))
 
@@ -209,24 +209,19 @@ if __name__ == '__main__':
   parser.add_argument('--arch_learning_rate', type=float, default=3e-4, help='learning rate for arch encoding')
   parser.add_argument('--arch_weight_decay', type=float, default=1e-3, help='weight decay for arch encoding')
   parser.add_argument('--name', type=str, default="runs", help='name for log')
+  parser.add_argument('--tag', type=str, default='', help='tag for this time search')
   parser.add_argument('--debug', action='store_true', default=False, help='debug or not')
-  parser.add_argument('--greedy', type=float, default=0, help='explore and exploitation')
+  parser.add_argument('--greedy', type=float, default=0.8, help='explore and exploitation')
   parser.add_argument('--l2', type=float, default=0, help='additional l2 regularization for alphas')
   args = parser.parse_args()
 
-  args.save = 'result/search-{}-{}'.format(args.save, time.strftime("%Y%m%d-%H%M%S"))
+  args.save = 'result/search/{}-search-{}-{}'.format(args.tag, args.save, time.strftime("%Y%m%d-%H%M%S"))
   if args.debug:
     args.save += "_debug"
   if not os.path.exists(args.data):
     args.data = '/automl/dataset/cifar'
   utils.create_exp_dir(args.save, scripts_to_save=glob.glob('*.py'))
-
-  log_format = '%(asctime)s %(message)s'
-  logging.basicConfig(stream=sys.stdout, level=logging.INFO,
-                      format=log_format, datefmt='%m/%d %I:%M:%S')
-  fh = logging.FileHandler(os.path.join(args.save, 'log.txt'))
-  fh.setFormatter(logging.Formatter(log_format))
-  logging.getLogger().addHandler(fh)
+  utils.init_logging(logging=logging,save_path=os.path.join(args.save, 'log.txt'))
   # configure(args.save + "/%s"%(args.name))
 
   CIFAR_CLASSES = 10

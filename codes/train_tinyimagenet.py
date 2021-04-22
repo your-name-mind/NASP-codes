@@ -18,44 +18,6 @@ import torch.backends.cudnn as cudnn
 from torch.autograd import Variable
 from model import NetworkImageNet as Network
 
-
-parser = argparse.ArgumentParser("tiny-imagenet")
-parser.add_argument('--data', type=str, default='../data/tiny-imagenet/', help='location of the data corpus')
-parser.add_argument('--batch_size', type=int, default=96, help='batch size')
-parser.add_argument('--learning_rate', type=float, default=0.1, help='init learning rate')
-parser.add_argument('--momentum', type=float, default=0.9, help='momentum')
-parser.add_argument('--weight_decay', type=float, default=3e-5, help='weight decay')
-parser.add_argument('--report_freq', type=float, default=100, help='report frequency')
-parser.add_argument('--gpu', type=int, default=0, help='gpu device id')
-parser.add_argument('--epochs', type=int, default=250, help='num of training epochs')
-parser.add_argument('--init_channels', type=int, default=48, help='num of init channels')
-parser.add_argument('--layers', type=int, default=14, help='total number of layers')
-parser.add_argument('--auxiliary', action='store_true', default=False, help='use auxiliary tower')
-parser.add_argument('--auxiliary_weight', type=float, default=0.4, help='weight for auxiliary loss')
-parser.add_argument('--drop_path_prob', type=float, default=0, help='drop path probability')
-parser.add_argument('--save', type=str, default='EXP', help='experiment name')
-parser.add_argument('--seed', type=int, default=0, help='random seed')
-parser.add_argument('--arch', type=str, default='NASP', help='which architecture to use')
-parser.add_argument('--grad_clip', type=float, default=5., help='gradient clipping')
-parser.add_argument('--label_smooth', type=float, default=0.1, help='label smoothing')
-parser.add_argument('--gamma', type=float, default=0.97, help='learning rate decay')
-parser.add_argument('--decay_period', type=int, default=1, help='epochs between two learning rate decays')
-parser.add_argument('--parallel', action='store_true', default=False, help='data parallelism')
-args = parser.parse_args()
-
-args.save = 'eval-{}-{}'.format(args.save, time.strftime("%Y%m%d-%H%M%S"))
-utils.create_exp_dir(args.save, scripts_to_save=glob.glob('*.py'))
-
-log_format = '%(asctime)s %(message)s'
-logging.basicConfig(stream=sys.stdout, level=logging.INFO,
-    format=log_format, datefmt='%m/%d %I:%M:%S %p')
-fh = logging.FileHandler(os.path.join(args.save, 'log.txt'))
-fh.setFormatter(logging.Formatter(log_format))
-logging.getLogger().addHandler(fh)
-
-CLASSES = 200
-
-
 class CrossEntropyLabelSmooth(nn.Module):
 
   def __init__(self, num_classes, epsilon):
@@ -127,10 +89,10 @@ def main():
     ]))
 
   train_queue = torch.utils.data.DataLoader(
-    train_data, batch_size=args.batch_size, shuffle=True, pin_memory=True, num_workers=4)
+    train_data, batch_size=args.batch_size, shuffle=True, pin_memory=True, num_workers=args.num_worker)
 
   valid_queue = torch.utils.data.DataLoader(
-    valid_data, batch_size=args.batch_size, shuffle=False, pin_memory=True, num_workers=4)
+    valid_data, batch_size=args.batch_size, shuffle=False, pin_memory=True, num_workers=args.num_worker)
 
   scheduler = torch.optim.lr_scheduler.StepLR(optimizer, args.decay_period, gamma=args.gamma)
 
@@ -220,4 +182,33 @@ def infer(valid_queue, model, criterion):
   return top1.avg, top5.avg, objs.avg
 
 if __name__ == '__main__':
-  main() 
+  parser = argparse.ArgumentParser("tiny-imagenet")
+  parser.add_argument('--data', type=str, default='../data/tiny-imagenet/', help='location of the data corpus')
+  parser.add_argument('--batch_size', type=int, default=96, help='batch size')
+  parser.add_argument('--learning_rate', type=float, default=0.1, help='init learning rate')
+  parser.add_argument('--momentum', type=float, default=0.9, help='momentum')
+  parser.add_argument('--weight_decay', type=float, default=3e-5, help='weight decay')
+  parser.add_argument('--report_freq', type=float, default=100, help='report frequency')
+  parser.add_argument('--gpu', type=int, default=0, help='gpu device id')
+  parser.add_argument('--epochs', type=int, default=250, help='num of training epochs')
+  parser.add_argument('--init_channels', type=int, default=48, help='num of init channels')
+  parser.add_argument('--layers', type=int, default=14, help='total number of layers')
+  parser.add_argument('--auxiliary', action='store_true', default=False, help='use auxiliary tower')
+  parser.add_argument('--auxiliary_weight', type=float, default=0.4, help='weight for auxiliary loss')
+  parser.add_argument('--drop_path_prob', type=float, default=0, help='drop path probability')
+  parser.add_argument('--save', type=str, default='EXP', help='experiment name')
+  parser.add_argument('--seed', type=int, default=0, help='random seed')
+  parser.add_argument('--num_worker', type=int, default=0, help='dataloader number of worker')
+  parser.add_argument('--arch', type=str, default='NASP', help='which architecture to use')
+  parser.add_argument('--grad_clip', type=float, default=5., help='gradient clipping')
+  parser.add_argument('--label_smooth', type=float, default=0.1, help='label smoothing')
+  parser.add_argument('--gamma', type=float, default=0.97, help='learning rate decay')
+  parser.add_argument('--decay_period', type=int, default=1, help='epochs between two learning rate decays')
+  parser.add_argument('--parallel', action='store_true', default=False, help='data parallelism')
+  args = parser.parse_args()
+
+  args.save = 'result/eval/eval-{}-{}'.format(args.save, time.strftime("%Y%m%d-%H%M%S"))
+  utils.create_exp_dir(args.save, scripts_to_save=glob.glob('*.py'))
+  utils.init_logging(logging, os.path.join(args.save, "log.txt"))
+  CLASSES = 200
+  main()
