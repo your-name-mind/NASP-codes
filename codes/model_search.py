@@ -24,10 +24,10 @@ class MixedOp(nn.Module):
       self._ops.append(op)
 
   def forward(self, x, weights, updateType):
-    if updateType == "weights":
-      result = [w * op(x) if w.data.cpu().numpy()[0] else w for w, op in zip(weights, self._ops)]
-    else:
-      result = [w * op(x) for w, op in zip(weights, self._ops)]
+    # if updateType == "weights":
+    result = [w * op(x)  for w, op in zip(weights, self._ops) if w.item()]
+    # else:
+    #   result = [w * op(x) for w, op in zip(weights, self._ops)]
     return sum(result)
 
 
